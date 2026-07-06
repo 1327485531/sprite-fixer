@@ -21,8 +21,8 @@ A tiny tool to fix AI-generated sprite sheets: auto-remove black backgrounds and
 
 1. 打开 [工具链接]
 2. 导入你的 4x4 序列图
-3. 点击 "Remove Background" 去黑底
-4. 点击 "Stabilize Frames" 稳帧
+3. 自动检测背景，去掉
+4. 重心对齐，包围盒，总有一个能让图片不抖
 5. 导出干净的序列图，丢进引擎直接用
 
 ---
