@@ -1,0 +1,859 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI精灵表 · 背景替换 · 纯色填充</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --surface2: #0f3460;
+            --accent: #e94560;
+            --accent2: #ff6b6b;
+            --text: #e0e0e0;
+            --text2: #b0b0b0;
+            --border: #2a2a4a;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', 'PingFang SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; }
+        .checkerboard-bg {
+            background-image: linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+            background-size: 20px 20px; background-color: #1a1a1a; border-radius: var(--radius-sm);
+        }
+        .app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; box-shadow: var(--shadow); position: sticky; top: 0; z-index: 100; }
+        .logo { font-size: 1.6em; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 600; background: var(--surface2); color: var(--accent2); border: 1px solid var(--accent); }
+        .main-container { display: flex; gap: 20px; padding: 20px 24px; max-width: 1600px; margin: 0 auto; flex-wrap: wrap; }
+        .panel { background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+        .panel-title { font-size: 1.05em; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .control-panel { flex: 0 0 480px; display: flex; flex-direction: column; gap: 16px; min-width: 400px; }
+        @media (max-width: 1000px) { .control-panel { flex:1 1 100%; } }
+        .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px 20px; text-align: center; cursor: pointer; background: var(--surface2); position: relative; }
+        .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: #1a1a35; }
+        .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .setting-group { margin-bottom: 12px; }
+        .setting-group label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; color: var(--text2); }
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px; background: var(--border); outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
+        .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+        .mode-btn { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.8em; font-weight: 500; text-align: center; }
+        .mode-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 18px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-weight: 600; font-size: 0.9em; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 16px rgba(233,68,96,0.3); }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+        .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+        .btn:disabled { opacity: 0.4; pointer-events: none; }
+        .preview-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; min-width: 400px; }
+        .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 700px) { .preview-grid { grid-template-columns: 1fr; } }
+        .preview-card { background: var(--surface2); border-radius: var(--radius); padding: 12px; border: 1px solid var(--border); text-align: center; }
+        .preview-card canvas { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
+        .analysis-banner { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.82em; display: flex; align-items: center; gap: 8px; background: #0d2137; color: #7cc4ff; }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 20px; border-radius: 20px; font-weight: 600; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .toast.show { opacity: 1; }
+        .toggle-switch { display: flex; align-items: center; gap: 8px; }
+        .toggle-switch input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+        code { background: #00000033; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+        .pixel-stats { font-size: 0.72em; color: var(--text2); max-height: 80px; overflow-y: auto; margin-top: 6px; }
+        .hidden { display: none !important; }
+        input[type="number"] { width: 70px; padding: 4px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+        .bg-color-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .bg-color-chip { width: 28px; height: 28px; border-radius: 6px; border: 2px solid #fff; cursor: pointer; position: relative; }
+        .bg-color-chip .remove-btn { position: absolute; top: -6px; right: -6px; background: var(--accent); color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; line-height: 16px; text-align: center; cursor: pointer; display: none; }
+        .bg-color-chip:hover .remove-btn { display: block; }
+        .pick-mode-indicator { font-size:0.8em; color: var(--accent2); margin-left:8px; }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <span class="logo">🎞️ SpriteAlign Pro</span>
+        <span class="badge">背景替换·纯色填充</span>
+    </header>
+
+    <div class="main-container">
+        <div class="control-panel">
+            <div class="panel">
+                <div class="panel-title">📤 上传4×4精灵表</div>
+                <div class="upload-zone" id="uploadZone">
+                    <div>🖼️ 拖拽或点击上传图片</div>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+                <div id="fileInfo" style="font-size:0.78em;color:var(--text2);margin-top:6px;">尚未选择文件</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">🎨 背景去除 / 替换</div>
+                <div class="setting-group">
+                    <label>颜色容差 <span id="toleranceVal">35</span></label>
+                    <input type="range" id="toleranceSlider" min="5" max="120" value="35" step="1">
+                </div>
+                <div class="setting-group">
+                    <label>边缘羽化 <span id="featherVal">2</span> px</label>
+                    <input type="range" id="featherSlider" min="0" max="8" value="2" step="0.5">
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" id="autoDetectBgBtn">🔍 智能检测背景色</button>
+                    <button class="btn btn-outline" id="pickBgBtn">💉 取色模式 <span id="pickModeIndicator" class="pick-mode-indicator"></span></button>
+                </div>
+                <div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <span>背景色列表（最多5个）：</span>
+                        <button class="btn btn-secondary" id="clearBgColorsBtn" style="font-size:0.7em;padding:2px 8px;">清空</button>
+                    </div>
+                    <div class="bg-color-list" id="bgColorList"></div>
+                    <div style="font-size:0.7em;color:var(--text2);">取色模式下点击画布拾取颜色，Shift+点击添加多色</div>
+                </div>
+                <div class="setting-group" style="margin-top:12px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="replaceBgCheckbox">
+                        🔄 替换为纯色背景
+                    </label>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                        <input type="color" id="replaceBgColorPicker" value="#00ff00" style="width:60px; height:30px;">
+                        <span style="font-size:0.8em; color:var(--text2);">替换目标颜色</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">🎯 对齐设置</div>
+                <div class="toggle-switch" style="margin-bottom:10px;">
+                    <input type="checkbox" id="autoGridCheckbox" checked>
+                    <label for="autoGridCheckbox">🔍 自动校正网格</label>
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:0.85em; color:var(--text2); margin-bottom:4px;">📌 对齐方式</div>
+                    <div class="btn-row" id="alignModeGroup">
+                        <button class="mode-btn active" data-mode="centroid">🎯 重心对齐</button>
+                        <button class="mode-btn" data-mode="bbox">📦 包围盒裁剪</button>
+                    </div>
+                </div>
+
+                <div id="centroidAxesGroup" style="margin-bottom:10px;">
+                    <div style="font-size:0.85em; color:var(--text2); margin-bottom:4px;">↔️ 轴向（重心时）</div>
+                    <div class="btn-row" id="axisModeGroup">
+                        <button class="mode-btn active" data-axis="both">双向</button>
+                        <button class="mode-btn" data-axis="horizontal">水平对齐</button>
+                        <button class="mode-btn" data-axis="vertical">垂直对齐</button>
+                    </div>
+                </div>
+
+                <div id="bboxOptionsGroup" class="hidden">
+                    <div class="setting-group">
+                        <label>↔️ 水平对齐</label>
+                        <div class="btn-row" id="hAlignModeGroup">
+                            <button class="mode-btn active" data-halign="center">居中</button>
+                            <button class="mode-btn" data-halign="left">左侧对齐</button>
+                            <button class="mode-btn" data-halign="right">右侧对齐</button>
+                            <button class="mode-btn" data-halign="custom">自定义 X</button>
+                        </div>
+                        <div id="customHAlignGroup" class="hidden" style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                            <span>X:</span><input type="number" id="customHOffset" value="0" min="0" step="1">
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>↕️ 垂直对齐</label>
+                        <div class="btn-row" id="vAlignModeGroup">
+                            <button class="mode-btn active" data-valign="center">居中</button>
+                            <button class="mode-btn" data-valign="top">顶部对齐</button>
+                            <button class="mode-btn" data-valign="bottom">底部对齐</button>
+                            <button class="mode-btn" data-valign="custom">自定义 Y</button>
+                        </div>
+                        <div id="customVAlignGroup" class="hidden" style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                            <span>Y:</span><input type="number" id="customVOffset" value="0" min="0" step="1">
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="unifiedBboxCheckbox">
+                            🔒 固定包围盒（统一裁剪范围）
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label>有效像素阈值 <span id="pixelThreshVal">10</span></label>
+                    <input type="range" id="pixelThreshSlider" min="1" max="5000" value="10" step="1">
+                </div>
+
+                <div class="setting-group" id="smoothGroup">
+                    <label>重心平滑 <span id="smoothVal">0.5</span></label>
+                    <input type="range" id="smoothSlider" min="0" max="1" value="0.5" step="0.05">
+                </div>
+
+                <div class="setting-group">
+                    <label>裁剪边距 <span id="marginVal">2</span> px</label>
+                    <input type="range" id="marginSlider" min="0" max="20" value="2" step="1">
+                </div>
+
+                <div class="setting-group">
+                    <label>输出画布尺寸 <span id="canvasSizeVal">自动</span></label>
+                    <input type="range" id="canvasSizeSlider" min="0" max="512" value="0" step="4">
+                </div>
+
+                <div id="analysisResult" class="analysis-banner">📋 请先上传并处理图片</div>
+                <div class="pixel-stats" id="pixelStats"></div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" id="processBtn" disabled>⚡ 处理图像</button>
+                <button class="btn btn-secondary" id="resetBtn">🔄 重置</button>
+            </div>
+            <button class="btn btn-outline" id="downloadBtn" disabled style="width:100%;">💾 下载PNG</button>
+        </div>
+
+        <div class="preview-panel">
+            <div class="preview-grid">
+                <div class="preview-card">
+                    <h4>📷 原始精灵表（点击取色）</h4>
+                    <div class="checkerboard-bg" id="originalBgWrapper" style="display:inline-block;padding:4px;"><canvas id="originalCanvas" width="400" height="400" style="cursor:crosshair;"></canvas></div>
+                </div>
+                <div class="preview-card">
+                    <h4>✨ 处理后</h4>
+                    <div class="checkerboard-bg" id="processedBgWrapper" style="display:inline-block;padding:4px;"><canvas id="processedCanvas" width="400" height="400"></canvas></div>
+                </div>
+            </div>
+            <div class="preview-card">
+                <h4>▶️ 动画预览（点击暂停）</h4>
+                <div style="display:flex; gap:20px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                    <div class="checkerboard-bg" id="animBgWrapper" style="padding:6px; cursor:pointer;"><canvas id="animCanvas" width="200" height="200"></canvas></div>
+                    <div style="text-align:left; font-size:0.8em;">
+                        <div>🎬 帧率：<span id="fpsDisplay">10</span> fps</div>
+                        <div>📐 预览：<span id="previewModeLabel" style="color:var(--accent2);">处理后</span></div>
+                        <button class="btn btn-secondary" id="togglePreviewBtn" style="font-size:0.7em;">🔄 切换原始/处理</button>
+                        <div style="margin-top:4px;"><input type="range" id="fpsSlider" min="4" max="24" value="10" step="1" style="width:100px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function() {
+            // DOM 元素
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('fileInput');
+            const toleranceSlider = document.getElementById('toleranceSlider');
+            const toleranceVal = document.getElementById('toleranceVal');
+            const featherSlider = document.getElementById('featherSlider');
+            const featherVal = document.getElementById('featherVal');
+            const autoDetectBgBtn = document.getElementById('autoDetectBgBtn');
+            const pickBgBtn = document.getElementById('pickBgBtn');
+            const bgColorList = document.getElementById('bgColorList');
+            const clearBgColorsBtn = document.getElementById('clearBgColorsBtn');
+            const pickModeIndicator = document.getElementById('pickModeIndicator');
+            const replaceBgCheckbox = document.getElementById('replaceBgCheckbox');
+            const replaceBgColorPicker = document.getElementById('replaceBgColorPicker');
+            const autoGridCheckbox = document.getElementById('autoGridCheckbox');
+            const alignModeGroup = document.getElementById('alignModeGroup');
+            const axisModeGroup = document.getElementById('axisModeGroup');
+            const hAlignModeGroup = document.getElementById('hAlignModeGroup');
+            const vAlignModeGroup = document.getElementById('vAlignModeGroup');
+            const customHAlignGroup = document.getElementById('customHAlignGroup');
+            const customVAlignGroup = document.getElementById('customVAlignGroup');
+            const customHOffset = document.getElementById('customHOffset');
+            const customVOffset = document.getElementById('customVOffset');
+            const unifiedBboxCheckbox = document.getElementById('unifiedBboxCheckbox');
+            const pixelThreshSlider = document.getElementById('pixelThreshSlider');
+            const pixelThreshVal = document.getElementById('pixelThreshVal');
+            const smoothSlider = document.getElementById('smoothSlider');
+            const smoothVal = document.getElementById('smoothVal');
+            const smoothGroup = document.getElementById('smoothGroup');
+            const marginSlider = document.getElementById('marginSlider');
+            const marginVal = document.getElementById('marginVal');
+            const canvasSizeSlider = document.getElementById('canvasSizeSlider');
+            const canvasSizeVal = document.getElementById('canvasSizeVal');
+            const analysisResult = document.getElementById('analysisResult');
+            const pixelStats = document.getElementById('pixelStats');
+            const processBtn = document.getElementById('processBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const originalCanvas = document.getElementById('originalCanvas');
+            const processedCanvas = document.getElementById('processedCanvas');
+            const animCanvas = document.getElementById('animCanvas');
+            const animBgWrapper = document.getElementById('animBgWrapper');
+            const originalBgWrapper = document.getElementById('originalBgWrapper');
+            const processedBgWrapper = document.getElementById('processedBgWrapper');
+            const animPreviewWrap = document.getElementById('animPreviewWrap');
+            const fpsDisplay = document.getElementById('fpsDisplay');
+            const previewModeLabel = document.getElementById('previewModeLabel');
+            const togglePreviewBtn = document.getElementById('togglePreviewBtn');
+            const fpsSlider = document.getElementById('fpsSlider');
+            const toast = document.getElementById('toast');
+
+            let originalImage = null, originalImageData = null, processedImageData = null, processedFrames = null;
+            let currentGridDef = null;
+            let bgColors = [{r:200, g:200, b:200}];
+            let pickModeActive = false;
+            let alignMode = 'centroid', axisMode = 'both';
+            let hAlign = 'center', vAlign = 'center';
+            let animationId = null, animFrameIndex = 0, lastAnimTime = 0, previewMode = 'processed', isAnimPaused = false;
+            let toastTimer = null;
+
+            function showToast(msg, d=2000) {
+                if(toastTimer) clearTimeout(toastTimer);
+                toast.textContent = msg; toast.classList.add('show');
+                toastTimer = setTimeout(() => toast.classList.remove('show'), d);
+            }
+            function clamp(v,min,max) { return Math.max(min, Math.min(max, v)); }
+            function colorDist(c1,c2) { return Math.sqrt((c1.r-c2.r)**2+(c1.g-c2.g)**2+(c1.b-c2.b)**2); }
+            function rgbToHex(r,g,b) { return '#'+[r,g,b].map(v=>clamp(Math.round(v),0,255).toString(16).padStart(2,'0')).join(''); }
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : {r:0,g:0,b:0};
+            }
+            function createCanvas(w,h) { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+            function cloneImageData(d) { return new ImageData(new Uint8ClampedArray(d.data), d.width, d.height); }
+
+            // 多色背景管理
+            function addBgColor(color) {
+                if (bgColors.length >= 5) { showToast('最多5个背景色'); return; }
+                bgColors.push(color);
+                updateBgColorUI();
+            }
+            function removeBgColor(index) {
+                if (bgColors.length <= 1) { showToast('至少保留一个背景色'); return; }
+                bgColors.splice(index, 1);
+                updateBgColorUI();
+            }
+            function clearBgColors() {
+                bgColors = [{r:200,g:200,b:200}];
+                updateBgColorUI();
+            }
+            function updateBgColorUI() {
+                bgColorList.innerHTML = '';
+                bgColors.forEach((c, i) => {
+                    const chip = document.createElement('span');
+                    chip.className = 'bg-color-chip';
+                    chip.style.backgroundColor = rgbToHex(c.r, c.g, c.b);
+                    chip.title = rgbToHex(c.r, c.g, c.b) + ' (点击删除)';
+                    chip.addEventListener('click', (e) => {
+                        if (e.shiftKey) return;
+                        removeBgColor(i);
+                    });
+                    const remove = document.createElement('span');
+                    remove.className = 'remove-btn';
+                    remove.innerHTML = '×';
+                    remove.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        removeBgColor(i);
+                    });
+                    chip.appendChild(remove);
+                    bgColorList.appendChild(chip);
+                });
+            }
+
+            // 智能背景检测（K-means 采样边缘）
+            function detectBackgroundColors(imageData, k = 3) {
+                const w = imageData.width, h = imageData.height, data = imageData.data;
+                const samples = [];
+                const edgeStep = Math.max(1, Math.min(w, h) / 40);
+                for (let x = 0; x < w; x += edgeStep) {
+                    for (let y = 0; y < h; y += edgeStep) {
+                        if (x < edgeStep * 3 || x > w - edgeStep * 3 || y < edgeStep * 3 || y > h - edgeStep * 3) {
+                            const i = (y * w + x) * 4;
+                            samples.push({ r: data[i], g: data[i+1], b: data[i+2] });
+                        }
+                    }
+                }
+                if (samples.length === 0) return [{r:200,g:200,b:200}];
+                const centers = [];
+                for (let i = 0; i < k; i++) {
+                    const idx = Math.floor(Math.random() * samples.length);
+                    centers.push({...samples[idx]});
+                }
+                const assign = new Array(samples.length);
+                let changed = true;
+                for (let iter = 0; iter < 10 && changed; iter++) {
+                    changed = false;
+                    for (let i = 0; i < samples.length; i++) {
+                        let minDist = Infinity, minIdx = 0;
+                        for (let j = 0; j < k; j++) {
+                            const dist = colorDist(samples[i], centers[j]);
+                            if (dist < minDist) { minDist = dist; minIdx = j; }
+                        }
+                        if (assign[i] !== minIdx) { assign[i] = minIdx; changed = true; }
+                    }
+                    const sums = Array(k).fill(0).map(() => ({r:0,g:0,b:0,count:0}));
+                    for (let i = 0; i < samples.length; i++) {
+                        const s = samples[i];
+                        const c = assign[i];
+                        sums[c].r += s.r; sums[c].g += s.g; sums[c].b += s.b;
+                        sums[c].count++;
+                    }
+                    for (let j = 0; j < k; j++) {
+                        if (sums[j].count > 0) {
+                            centers[j] = {
+                                r: Math.round(sums[j].r / sums[j].count),
+                                g: Math.round(sums[j].g / sums[j].count),
+                                b: Math.round(sums[j].b / sums[j].count)
+                            };
+                        }
+                    }
+                }
+                const counts = Array(k).fill(0);
+                assign.forEach(a => counts[a]++);
+                const ranked = centers.map((c, i) => ({color: c, count: counts[i]}))
+                                     .sort((a, b) => b.count - a.count);
+                return ranked.slice(0, 3).map(item => item.color);
+            }
+
+            // 背景去除/替换函数
+            function processBackground(frameData, bgColors, tolerance, feather, replaceMode, replaceColor) {
+                const res = cloneImageData(frameData), d = res.data, w = res.width, h = res.height, fDist = feather;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const i = (y * w + x) * 4;
+                        const px = { r: d[i], g: d[i+1], b: d[i+2] };
+                        let isBg = false, edgeFactor = 0;
+                        for (const bg of bgColors) {
+                            const dist = colorDist(px, bg);
+                            if (dist <= tolerance - fDist) { isBg = true; break; }
+                            else if (dist < tolerance + fDist && fDist > 0) {
+                                edgeFactor = Math.max(edgeFactor, (dist - (tolerance - fDist)) / (2 * fDist));
+                            }
+                        }
+                        if (isBg) {
+                            if (replaceMode) {
+                                d[i] = replaceColor.r;
+                                d[i+1] = replaceColor.g;
+                                d[i+2] = replaceColor.b;
+                                d[i+3] = 255;
+                            } else {
+                                d[i+3] = 0;
+                            }
+                        } else if (edgeFactor > 0 && !replaceMode) {
+                            // 边缘羽化仅对透明模式有效，替换模式不做羽化以免前景颜色混合
+                            d[i+3] = clamp(Math.round((1 - edgeFactor) * 255), 0, 255);
+                        }
+                        // 替换模式下，非背景像素保持不变
+                    }
+                }
+                return res;
+            }
+
+            // 网格检测与帧提取
+            function detectGridLines(imageData, bgColors, tolerance=30) {
+                const w=imageData.width, h=imageData.height, data=imageData.data;
+                const isBg = (x,y) => bgColors.some(c => colorDist({r:data[(y*w+x)*4], g:data[(y*w+x)*4+1], b:data[(y*w+x)*4+2]}, c) <= tolerance);
+                const rowBgRatio = Array.from({length:h}, (_,y) => { let cnt=0; for(let x=0; x<w; x++) if(isBg(x,y)) cnt++; return cnt/w; });
+                const colBgRatio = Array.from({length:w}, (_,x) => { let cnt=0; for(let y=0; y<h; y++) if(isBg(x,y)) cnt++; return cnt/h; });
+                const findDividers = (ratios, totalLen, threshold=0.85) => {
+                    const candidates=[]; let inSeg=false, start=0;
+                    for(let i=0; i<totalLen; i++) {
+                        if(ratios[i]>=threshold && !inSeg) { inSeg=true; start=i; }
+                        else if(ratios[i]<threshold && inSeg) { inSeg=false; candidates.push(Math.round((start+i-1)/2)); }
+                    }
+                    if(inSeg) candidates.push(Math.round((start+totalLen-1)/2));
+                    return candidates.filter(v=>v>5 && v<totalLen-5);
+                };
+                const rowDivs=findDividers(rowBgRatio, h), colDivs=findDividers(colBgRatio, w);
+                if(rowDivs.length===5 && colDivs.length===5) return { rows: rowDivs.sort((a,b)=>a-b), cols: colDivs.sort((a,b)=>a-b) };
+                return null;
+            }
+            function extractFramesByGrid(imageData, gridDef) {
+                const w=imageData.width, h=imageData.height, rows=gridDef.rows, cols=gridDef.cols;
+                const frames=[], tempCanvas=createCanvas(w,h);
+                tempCanvas.getContext('2d').putImageData(imageData,0,0);
+                for(let r=0; r<4; r++) for(let c=0; c<4; c++) {
+                    const x=cols[c], y=rows[r], fw=cols[c+1]-x, fh=rows[r+1]-y;
+                    const fc=createCanvas(fw,fh); fc.getContext('2d').drawImage(tempCanvas, x,y,fw,fh, 0,0,fw,fh);
+                    frames.push({ imageData: fc.getContext('2d').getImageData(0,0,fw,fh), index: r*4+c, width:fw, height:fh });
+                }
+                return frames;
+            }
+            function extractFramesUniform(imageData) {
+                const w=imageData.width, h=imageData.height, fw=Math.floor(w/4), fh=Math.floor(h/4);
+                const rows=[0,fh,fh*2,fh*3,h], cols=[0,fw,fw*2,fw*3,w];
+                return { frames: extractFramesByGrid(imageData, {rows,cols}), gridDef:{rows,cols} };
+            }
+
+            function getCentroidAndCount(imageData, th=10) {
+                const d=imageData.data, w=imageData.width, h=imageData.height;
+                let sx=0, sy=0, cnt=0;
+                for(let y=0; y<h; y++) for(let x=0; x<w; x++) if(d[(y*w+x)*4+3]>th) { sx+=x; sy+=y; cnt++; }
+                return { x: cnt>0?sx/cnt:w/2, y: cnt>0?sy/cnt:h/2, count:cnt, isEmpty: cnt<10 };
+            }
+            function smoothArray(arr, factor) {
+                if(factor<=0||arr.length<2) return arr.slice();
+                const s=[arr[0]]; for(let i=1;i<arr.length;i++) s.push({ x:factor*arr[i].x+(1-factor)*s[i-1].x, y:factor*arr[i].y+(1-factor)*s[i-1].y });
+                return s;
+            }
+
+            function centroidAlignFramesSafe(framesData, margin, manualSize, pixelThresh, smoothFactor) {
+                const centroids = framesData.map(f => getCentroidAndCount(f.imageData, 15));
+                const validIdx = centroids.map((c, i) => c.count >= pixelThresh ? i : -1).filter(i => i >= 0);
+                if (validIdx.length === 0) {
+                    const outW = Math.max(...framesData.map(f => f.width), 1);
+                    const outH = Math.max(...framesData.map(f => f.height), 1);
+                    return framesData.map(f => {
+                        const oc = createCanvas(outW, outH), ctx = oc.getContext('2d');
+                        const sc = createCanvas(f.width, f.height);
+                        sc.getContext('2d').putImageData(f.imageData, 0, 0);
+                        ctx.drawImage(sc, (outW - f.width) / 2, (outH - f.height) / 2);
+                        return { imageData: ctx.getImageData(0, 0, outW, outH), width: outW, height: outH };
+                    });
+                }
+                const smoothX = new Array(framesData.length), smoothY = new Array(framesData.length);
+                const validCenters = validIdx.map(i => centroids[i]);
+                const smoothedValid = smoothFactor > 0 ? smoothArray(validCenters, smoothFactor) : validCenters;
+                validIdx.forEach((origIdx, i) => { smoothX[origIdx] = smoothedValid[i].x; smoothY[origIdx] = smoothedValid[i].y; });
+                for (let i = 0; i < framesData.length; i++) {
+                    if (smoothX[i] === undefined) { smoothX[i] = framesData[i].width / 2; smoothY[i] = framesData[i].height / 2; }
+                }
+                const avgX = validCenters.reduce((s, c) => s + c.x, 0) / validCenters.length;
+                const avgY = validCenters.reduce((s, c) => s + c.y, 0) / validCenters.length;
+                const targets = framesData.map((_, i) => {
+                    if (axisMode === 'both') return { x: avgX, y: avgY };
+                    if (axisMode === 'horizontal') return { x: avgX, y: smoothY[i] };
+                    return { x: smoothX[i], y: avgY };
+                });
+                const placements = framesData.map((frame, i) => ({
+                    x: targets[i].x - smoothX[i],
+                    y: targets[i].y - smoothY[i],
+                    w: frame.width, h: frame.height
+                }));
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                placements.forEach(p => { if(p.x<minX)minX=p.x; if(p.y<minY)minY=p.y; if(p.x+p.w>maxX)maxX=p.x+p.w; if(p.y+p.h>maxY)maxY=p.y+p.h; });
+                const finalW = manualSize>0 ? manualSize : Math.ceil(maxX-minX) + margin*2;
+                const finalH = manualSize>0 ? manualSize : Math.ceil(maxY-minY) + margin*2;
+                const offsetX = -minX + margin, offsetY = -minY + margin;
+                return framesData.map((frame, i) => {
+                    const src = createCanvas(frame.width, frame.height);
+                    src.getContext('2d').putImageData(frame.imageData,0,0);
+                    const oc = createCanvas(finalW, finalH), ctx = oc.getContext('2d');
+                    ctx.drawImage(src, placements[i].x+offsetX, placements[i].y+offsetY);
+                    return { imageData: ctx.getImageData(0,0,finalW,finalH), width:finalW, height:finalH };
+                });
+            }
+
+            function bboxCropCustomAlignFrames(framesData, margin, manualSize, hAlign, vAlign, customH, customV, unifiedBbox) {
+                const bboxes = framesData.map(f => {
+                    const d = f.imageData.data, w = f.width, h = f.height;
+                    let minX = w, minY = h, maxX = -1, maxY = -1;
+                    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+                        if (d[(y*w+x)*4+3] > 10) { if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+                    return { minX, minY, maxX, maxY, w: maxX-minX+1, h: maxY-minY+1, isEmpty: minX>maxX };
+                });
+
+                const crops = bboxes.map((b, i) => {
+                    if (b.isEmpty) return { x: 0, y: 0, w: framesData[i].width, h: framesData[i].height, isEmpty: true };
+                    const cx = Math.max(0, b.minX - margin);
+                    const cy = Math.max(0, b.minY - margin);
+                    const cw = Math.min(framesData[i].width - cx, b.w + margin * 2);
+                    const ch = Math.min(framesData[i].height - cy, b.h + margin * 2);
+                    return { x: cx, y: cy, w: cw, h: ch, isEmpty: false };
+                });
+
+                let globalCrop = null;
+                if (unifiedBbox) {
+                    let gx = Infinity, gy = Infinity, gx2 = -Infinity, gy2 = -Infinity;
+                    crops.forEach((c, i) => {
+                        if (c.isEmpty) {
+                            const fw = framesData[i].width, fh = framesData[i].height;
+                            if(0 < gx) gx = 0; if(0 < gy) gy = 0;
+                            if(fw-1 > gx2) gx2 = fw-1; if(fh-1 > gy2) gy2 = fh-1;
+                        } else {
+                            if(c.x < gx) gx = c.x;
+                            if(c.y < gy) gy = c.y;
+                            if(c.x + c.w - 1 > gx2) gx2 = c.x + c.w - 1;
+                            if(c.y + c.h - 1 > gy2) gy2 = c.y + c.h - 1;
+                        }
+                    });
+                    globalCrop = { x: gx, y: gy, w: gx2 - gx + 1, h: gy2 - gy + 1 };
+                }
+
+                let outW, outH;
+                if (manualSize > 0) {
+                    outW = outH = manualSize;
+                } else if (unifiedBbox && globalCrop) {
+                    outW = globalCrop.w;
+                    outH = globalCrop.h;
+                } else {
+                    outW = Math.max(...crops.map(c => c.w));
+                    outH = Math.max(...crops.map(c => c.h));
+                }
+                outW = Math.max(outW, 1); outH = Math.max(outH, 1);
+
+                const result = [];
+                for (let i = 0; i < framesData.length; i++) {
+                    const frame = framesData[i];
+                    const src = createCanvas(frame.width, frame.height);
+                    src.getContext('2d').putImageData(frame.imageData, 0, 0);
+                    const oc = createCanvas(outW, outH), ctx = oc.getContext('2d');
+                    const crop = crops[i];
+                    const srcCrop = crop.isEmpty ?
+                        { x: 0, y: 0, w: frame.width, h: frame.height } :
+                        { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+                    const cropW = srcCrop.w, cropH = srcCrop.h;
+
+                    let destX;
+                    if (hAlign === 'left') {
+                        destX = 0;
+                    } else if (hAlign === 'right') {
+                        destX = outW - cropW;
+                    } else if (hAlign === 'custom') {
+                        destX = parseInt(customH) || 0;
+                    } else {
+                        destX = (outW - cropW) / 2;
+                    }
+
+                    let destY;
+                    if (vAlign === 'top') {
+                        destY = 0;
+                    } else if (vAlign === 'bottom') {
+                        destY = outH - cropH;
+                    } else if (vAlign === 'custom') {
+                        destY = parseInt(customV) || 0;
+                    } else {
+                        destY = (outH - cropH) / 2;
+                    }
+
+                    ctx.drawImage(src, srcCrop.x, srcCrop.y, cropW, cropH,
+                                  destX, destY, cropW, cropH);
+
+                    result.push({ imageData: ctx.getImageData(0, 0, outW, outH), width: outW, height: outH });
+                }
+                return result;
+            }
+
+            function composeSpriteSheet(frames) {
+                if(frames.length===0) return createCanvas(1,1);
+                const fw=frames[0].width, fh=frames[0].height;
+                const sheet=createCanvas(fw*4,fh*4), ctx=sheet.getContext('2d');
+                frames.forEach((f,i)=>{
+                    const tmp=createCanvas(fw,fh); tmp.getContext('2d').putImageData(f.imageData,0,0);
+                    ctx.drawImage(tmp, (i%4)*fw, Math.floor(i/4)*fh);
+                });
+                return sheet;
+            }
+
+            function fullProcess() {
+                if(!originalImageData) return;
+                if(bgColors.length === 0) { showToast('请至少设置一个背景色'); return; }
+                const tolerance=parseInt(toleranceSlider.value), feather=parseFloat(featherSlider.value);
+                const margin=parseInt(marginSlider.value), manualSize=parseInt(canvasSizeSlider.value);
+                const useAutoGrid=autoGridCheckbox.checked, pixelThresh=parseInt(pixelThreshSlider.value), smoothF=parseFloat(smoothSlider.value);
+                const useUnified = alignMode === 'bbox' && unifiedBboxCheckbox.checked;
+                const customHVal = parseInt(customHOffset.value) || 0;
+                const customVVal = parseInt(customVOffset.value) || 0;
+                const replaceMode = replaceBgCheckbox.checked;
+                const replaceColor = hexToRgb(replaceBgColorPicker.value);
+
+                let frames, gridDef;
+                if(useAutoGrid) {
+                    const det=detectGridLines(originalImageData, bgColors, tolerance+10);
+                    if(det) { gridDef=det; frames=extractFramesByGrid(originalImageData, det); analysisResult.innerHTML='✅ 网格检测成功'; }
+                    else { const u=extractFramesUniform(originalImageData); gridDef=u.gridDef; frames=u.frames; analysisResult.innerHTML='⚠️ 检测失败，均匀分割'; }
+                } else { const u=extractFramesUniform(originalImageData); gridDef=u.gridDef; frames=u.frames; analysisResult.innerHTML='📐 均匀分割'; }
+                currentGridDef=gridDef;
+
+                const bgFrames = frames.map(f=>({...f, imageData: processBackground(f.imageData, bgColors, tolerance, feather, replaceMode, replaceColor)}));
+                pixelStats.innerHTML = '像素: '+bgFrames.map(f=>getCentroidAndCount(f.imageData,15).count).join(', ');
+
+                let centered;
+                if(alignMode==='centroid') {
+                    centered = centroidAlignFramesSafe(bgFrames, margin, manualSize, pixelThresh, smoothF);
+                    analysisResult.innerHTML += ` | 重心对齐(${axisMode})`;
+                } else {
+                    centered = bboxCropCustomAlignFrames(bgFrames, margin, manualSize, hAlign, vAlign, customHVal, customVVal, useUnified);
+                    analysisResult.innerHTML += ` | 包围盒·水平${hAlign}·垂直${vAlign}${useUnified?'·固定':''}`;
+                }
+
+                const resultCanvas = composeSpriteSheet(centered);
+                processedImageData = resultCanvas.getContext('2d').getImageData(0,0,resultCanvas.width, resultCanvas.height);
+                processedFrames = centered;
+                canvasSizeVal.textContent = manualSize>0 ? `${manualSize}px` : `自动 ${centered[0].width}x${centered[0].height}px`;
+                updateProcessedPreview(resultCanvas);
+                updateAnimationPreview();
+            }
+
+            function updateOriginalPreview() {
+                if(!originalImage) return;
+                const s=Math.min(1,400/originalImage.width);
+                originalCanvas.width=originalImage.width*s; originalCanvas.height=originalImage.height*s;
+                const ctx = originalCanvas.getContext('2d');
+                ctx.clearRect(0,0,originalCanvas.width,originalCanvas.height);
+                ctx.drawImage(originalImage,0,0,originalCanvas.width,originalCanvas.height);
+            }
+            function updateProcessedPreview(c) {
+                if(!c) return;
+                const s=Math.min(1,400/c.width);
+                processedCanvas.width=c.width*s; processedCanvas.height=c.height*s;
+                const ctx = processedCanvas.getContext('2d');
+                ctx.clearRect(0,0,processedCanvas.width,processedCanvas.height);
+                ctx.drawImage(c,0,0,processedCanvas.width,processedCanvas.height);
+            }
+            function getFrameForAnim(idx) {
+                if(previewMode==='processed' && processedFrames) return processedFrames[clamp(idx,0,15)].imageData;
+                if(originalImageData) {
+                    const def = currentGridDef || extractFramesUniform(originalImageData).gridDef;
+                    return extractFramesByGrid(originalImageData, def)[clamp(idx,0,15)].imageData;
+                }
+                return null;
+            }
+            function renderAnim(ts) {
+                if(isAnimPaused) { animationId=requestAnimationFrame(renderAnim); return; }
+                if(ts-lastAnimTime >= 1000/parseInt(fpsSlider.value)) {
+                    const fd=getFrameForAnim(animFrameIndex);
+                    if(fd) {
+                        const s=Math.min(1,200/Math.max(fd.width,fd.height));
+                        animCanvas.width=fd.width*s; animCanvas.height=fd.height*s;
+                        const ctx = animCanvas.getContext('2d');
+                        ctx.clearRect(0,0,animCanvas.width,animCanvas.height);
+                        const tc=createCanvas(fd.width,fd.height); tc.getContext('2d').putImageData(fd,0,0);
+                        ctx.drawImage(tc,0,0,animCanvas.width,animCanvas.height);
+                    }
+                    animFrameIndex=(animFrameIndex+1)%16; lastAnimTime=ts;
+                }
+                animationId=requestAnimationFrame(renderAnim);
+            }
+            function startAnim() { stopAnim(); isAnimPaused=false; lastAnimTime=0; animFrameIndex=0; animationId=requestAnimationFrame(renderAnim); }
+            function stopAnim() { if(animationId) cancelAnimationFrame(animationId); }
+            function togglePause() { isAnimPaused=!isAnimPaused; if(!isAnimPaused) lastAnimTime=0; }
+            function updateAnimationPreview() { stopAnim(); startAnim(); }
+
+            // 事件绑定
+            uploadZone.addEventListener('dragover', e=>{ e.preventDefault(); uploadZone.classList.add('drag-over'); });
+            uploadZone.addEventListener('dragleave', ()=> uploadZone.classList.remove('drag-over'));
+            uploadZone.addEventListener('drop', e=>{ e.preventDefault(); uploadZone.classList.remove('drag-over'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+            fileInput.addEventListener('change', ()=> { if(fileInput.files[0]) handleFile(fileInput.files[0]); });
+            uploadZone.addEventListener('click', (e)=>{ if(e.target!==fileInput) fileInput.click(); });
+
+            async function handleFile(file) {
+                if(!file.type.startsWith('image/')) { showToast('请上传图片'); return; }
+                const img=new Image(); img.onload=()=>{
+                    originalImage=img; const tc=createCanvas(img.width,img.height); tc.getContext('2d').drawImage(img,0,0);
+                    originalImageData=tc.getContext('2d').getImageData(0,0,img.width,img.height);
+                    updateOriginalPreview(); processBtn.disabled=false; downloadBtn.disabled=true;
+                    analysisResult.innerHTML='📋 图片已加载'; pixelStats.innerHTML='';
+                }; img.src=URL.createObjectURL(file);
+            }
+
+            processBtn.addEventListener('click', ()=>{ processBtn.disabled=true; setTimeout(()=>{ fullProcess(); downloadBtn.disabled=false; previewMode='processed'; previewModeLabel.textContent='处理后'; processBtn.disabled=false; },50); });
+            resetBtn.addEventListener('click', ()=>{
+                originalImage=null; originalImageData=null; processedFrames=null; processBtn.disabled=true; downloadBtn.disabled=true;
+                toleranceSlider.value=35; toleranceVal.textContent='35'; featherSlider.value=2; featherVal.textContent='2';
+                marginSlider.value=2; marginVal.textContent='2'; canvasSizeSlider.value=0; canvasSizeVal.textContent='自动';
+                pixelThreshSlider.value=10; pixelThreshVal.textContent='10'; smoothSlider.value=0.5; smoothVal.textContent='0.50';
+                autoGridCheckbox.checked=true; setAlignMode('centroid'); setAxisMode('both');
+                setHAlign('center'); setVAlign('center'); unifiedBboxCheckbox.checked = false;
+                analysisResult.innerHTML='📋 请先上传图片'; pixelStats.innerHTML='';
+                originalCanvas.getContext('2d').clearRect(0,0,400,400); processedCanvas.getContext('2d').clearRect(0,0,400,400); stopAnim();
+            });
+            downloadBtn.addEventListener('click', ()=>{
+                if(!processedImageData) return;
+                const c=createCanvas(processedImageData.width, processedImageData.height); c.getContext('2d').putImageData(processedImageData,0,0);
+                c.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='spritesheet_fixed.png'; a.click(); });
+            });
+
+            function setAlignMode(m) {
+                alignMode=m;
+                alignModeGroup.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+                alignModeGroup.querySelector(`[data-mode="${m}"]`).classList.add('active');
+                document.getElementById('centroidAxesGroup').classList.toggle('hidden', m!=='centroid');
+                smoothGroup.classList.toggle('hidden', m!=='centroid');
+                document.getElementById('bboxOptionsGroup').classList.toggle('hidden', m==='centroid');
+            }
+            function setAxisMode(a) {
+                axisMode=a;
+                axisModeGroup.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+                axisModeGroup.querySelector(`[data-axis="${a}"]`).classList.add('active');
+            }
+            function setHAlign(a) {
+                hAlign=a;
+                hAlignModeGroup.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+                hAlignModeGroup.querySelector(`[data-halign="${a}"]`).classList.add('active');
+                customHAlignGroup.classList.toggle('hidden', a!=='custom');
+            }
+            function setVAlign(a) {
+                vAlign=a;
+                vAlignModeGroup.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+                vAlignModeGroup.querySelector(`[data-valign="${a}"]`).classList.add('active');
+                customVAlignGroup.classList.toggle('hidden', a!=='custom');
+            }
+
+            alignModeGroup.addEventListener('click', e=>{ const b=e.target.closest('.mode-btn'); if(b) setAlignMode(b.dataset.mode); });
+            axisModeGroup.addEventListener('click', e=>{ const b=e.target.closest('.mode-btn'); if(b) setAxisMode(b.dataset.axis); });
+            hAlignModeGroup.addEventListener('click', e=>{ const b=e.target.closest('.mode-btn'); if(b) setHAlign(b.dataset.halign); });
+            vAlignModeGroup.addEventListener('click', e=>{ const b=e.target.closest('.mode-btn'); if(b) setVAlign(b.dataset.valign); });
+            marginSlider.addEventListener('input', ()=> marginVal.textContent=marginSlider.value);
+            canvasSizeSlider.addEventListener('input', ()=>{ const v=parseInt(canvasSizeSlider.value); canvasSizeVal.textContent = v===0 ? '自动' : `${v}px`; });
+            pixelThreshSlider.addEventListener('input', ()=> pixelThreshVal.textContent=pixelThreshSlider.value);
+            smoothSlider.addEventListener('input', ()=> smoothVal.textContent=parseFloat(smoothSlider.value).toFixed(2));
+            toleranceSlider.addEventListener('input', ()=> toleranceVal.textContent=toleranceSlider.value);
+            featherSlider.addEventListener('input', ()=> featherVal.textContent=featherSlider.value);
+
+            // 取色模式
+            function activatePickMode() {
+                if (!originalImageData) { showToast('请先上传图片'); return; }
+                pickModeActive = !pickModeActive;
+                pickBgBtn.classList.toggle('active', pickModeActive);
+                pickModeIndicator.textContent = pickModeActive ? '(点击画布取色, Shift添加)' : '';
+                originalCanvas.style.outline = pickModeActive ? '2px solid var(--accent)' : '';
+            }
+            originalCanvas.addEventListener('click', (e) => {
+                if (!pickModeActive || !originalImageData) return;
+                const rect = originalCanvas.getBoundingClientRect();
+                const scaleX = originalImage.width / rect.width;
+                const scaleY = originalImage.height / rect.height;
+                const x = Math.floor((e.clientX - rect.left) * scaleX);
+                const y = Math.floor((e.clientY - rect.top) * scaleY);
+                if (x < 0 || y < 0 || x >= originalImage.width || y >= originalImage.height) return;
+                const idx = (y * originalImage.width + x) * 4;
+                const color = {
+                    r: originalImageData.data[idx],
+                    g: originalImageData.data[idx+1],
+                    b: originalImageData.data[idx+2]
+                };
+                if (e.shiftKey) {
+                    addBgColor(color);
+                    showToast(`添加背景色 ${rgbToHex(color.r,color.g,color.b)}`);
+                } else {
+                    bgColors = [color];
+                    updateBgColorUI();
+                    showToast(`设置背景色 ${rgbToHex(color.r,color.g,color.b)}`);
+                }
+            });
+
+            autoDetectBgBtn.addEventListener('click', () => {
+                if (!originalImageData) return;
+                bgColors = detectBackgroundColors(originalImageData, 3);
+                updateBgColorUI();
+                showToast('已自动检测背景色');
+            });
+            pickBgBtn.addEventListener('click', activatePickMode);
+            clearBgColorsBtn.addEventListener('click', clearBgColors);
+
+            // 背景替换颜色变化时自动重新处理（如果已有结果）
+            replaceBgCheckbox.addEventListener('change', () => {
+                if (processedImageData) fullProcess();
+            });
+            replaceBgColorPicker.addEventListener('input', () => {
+                if (replaceBgCheckbox.checked && processedImageData) fullProcess();
+            });
+
+            animPreviewWrap.addEventListener('click', togglePause);
+            document.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); togglePause(); } });
+            fpsSlider.addEventListener('input', ()=>{ fpsDisplay.textContent=fpsSlider.value; lastAnimTime=0; });
+            togglePreviewBtn.addEventListener('click', ()=>{ previewMode=previewMode==='processed'?'original':'processed'; previewModeLabel.textContent=previewMode==='processed'?'处理后':'原始'; updateAnimationPreview(); });
+
+            updateBgColorUI();
+            setAlignMode('centroid');
+            setAxisMode('both');
+            setHAlign('center');
+            setVAlign('center');
+        })();
+    </script>
+</body>
+</html>
